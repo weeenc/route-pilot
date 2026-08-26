@@ -27,7 +27,6 @@ const TERMINATE_COMMAND: &str = "signal SIGTERM";
 const EVENT_CHANNEL_CAPACITY: usize = 256;
 const MAX_DESCRIPTION_CHARACTERS: usize = 1024;
 const SOCKET_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const CONNECTED_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A normalized OpenVPN state notification.
 ///
@@ -80,12 +79,20 @@ pub struct ManagementClient {
 
 impl ManagementClient {
     pub async fn connect(port: u16) -> Result<Self, AppError> {
-        Self::connect_with_idle_timeout(port, CONNECTED_IDLE_TIMEOUT).await
+        Self::connect_with_optional_idle_timeout(port, None).await
     }
 
+    #[cfg(test)]
     pub(super) async fn connect_with_idle_timeout(
         port: u16,
         idle_timeout: Duration,
+    ) -> Result<Self, AppError> {
+        Self::connect_with_optional_idle_timeout(port, Some(idle_timeout)).await
+    }
+
+    async fn connect_with_optional_idle_timeout(
+        port: u16,
+        idle_timeout: Option<Duration>,
     ) -> Result<Self, AppError> {
         if port == 0 {
             return Err(AppError::ManagementConnectFailed {
@@ -108,13 +115,13 @@ impl ManagementClient {
     /// the cleartext management protocol from being exposed as a local TCP server
     /// and removes the release-then-bind port race.
     pub(super) async fn from_stream(stream: TcpStream, port: u16) -> Result<Self, AppError> {
-        Self::from_stream_with_idle_timeout(stream, port, CONNECTED_IDLE_TIMEOUT).await
+        Self::from_stream_with_idle_timeout(stream, port, None).await
     }
 
     async fn from_stream_with_idle_timeout(
         stream: TcpStream,
         port: u16,
-        idle_timeout: Duration,
+        idle_timeout: Option<Duration>,
     ) -> Result<Self, AppError> {
         if port == 0
             || !stream
@@ -296,15 +303,19 @@ fn parse_optional_ip(value: &str) -> Option<IpAddr> {
 async fn read_management_events(
     reader: OwnedReadHalf,
     sender: mpsc::Sender<Result<ManagementEvent, AppError>>,
-    connected_idle_timeout: Duration,
+    connected_idle_timeout: Option<Duration>,
 ) {
     let mut lines = BufReader::new(reader).lines();
     let mut connected = false;
     loop {
         let next_line = if connected {
-            match timeout(connected_idle_timeout, lines.next_line()).await {
-                Ok(result) => result.map_err(connect_error),
-                Err(_) => Err(AppError::ManagementTimeout),
+            if let Some(idle_timeout) = connected_idle_timeout {
+                match timeout(idle_timeout, lines.next_line()).await {
+                    Ok(result) => result.map_err(connect_error),
+                    Err(_) => Err(AppError::ManagementTimeout),
+                }
+            } else {
+                lines.next_line().await.map_err(connect_error)
             }
         } else {
             lines.next_line().await.map_err(connect_error)

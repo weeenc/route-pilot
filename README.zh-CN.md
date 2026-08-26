@@ -33,7 +33,7 @@
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
 | macOS | 支持 | 使用随应用提供、由 root 管理的助手和 OpenVPN 运行时。 |
-| Windows | 支持 | 使用已安装的 OpenVPN 2.x 可执行文件和平台标准权限。 |
+| Windows | 支持 | 使用已安装的 OpenVPN 2.x 可执行文件，并以管理员权限运行。 |
 | Linux | 暂不支持 | 当前运行时代码会明确禁用未支持的平台路径。 |
 
 CI 会在 macOS 和 Windows 上运行完整验证流程。
@@ -64,7 +64,8 @@ brew install openvpn lzo lz4 pkcs11-helper openssl@3
 
 在 Windows 上，请安装 Microsoft C++ Build Tools、必要时安装 WebView2，并安装
 [OpenVPN Community Edition](https://openvpn.net/community/)。本地构建时请使用 MSVC
-Rust 工具链。
+Rust 工具链。RoutePilot 启动时会请求管理员权限，以便 OpenVPN 配置虚拟网卡、DNS 和
+系统路由；请批准 Windows 的 UAC 提示。
 
 ## 快速开始
 
@@ -97,6 +98,9 @@ pnpm tauri dev
 ```powershell
 pnpm tauri dev
 ```
+
+运行开发版本前，请先以管理员身份启动终端。Windows 不允许未提权的开发进程直接启动
+带有管理员清单的 RoutePilot 可执行文件。
 
 如果自动检测未找到 OpenVPN，请在**设置 → OpenVPN 可执行文件**中填写其绝对路径。
 

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { delimiter } from "node:path";
 
 const environment = { ...process.env };
@@ -12,8 +13,8 @@ if (process.platform === "darwin") {
     .join(delimiter);
 }
 
-const executable = process.platform === "win32" ? "tauri.cmd" : "tauri";
-const result = spawnSync(executable, process.argv.slice(2), {
+const tauriCli = fileURLToPath(import.meta.resolve("@tauri-apps/cli/tauri.js"));
+const result = spawnSync(process.execPath, [tauriCli, ...process.argv.slice(2)], {
   env: environment,
   stdio: "inherit",
 });

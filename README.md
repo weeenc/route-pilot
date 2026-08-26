@@ -40,7 +40,7 @@
 | Platform | Status | Notes |
 | --- | --- | --- |
 | macOS | Supported | Uses the bundled, root-owned helper and OpenVPN runtime. |
-| Windows | Supported | Uses an installed OpenVPN 2.x executable and standard platform permissions. |
+| Windows | Supported | Uses an installed OpenVPN 2.x executable with administrator privileges. |
 | Linux | Not supported | The current runtime explicitly disables unsupported platform paths. |
 
 CI runs the full verification suite on both macOS and Windows.
@@ -74,7 +74,9 @@ brew install openvpn lzo lz4 pkcs11-helper openssl@3
 
 On Windows, install the Microsoft C++ Build Tools, WebView2 when required, and
 the [OpenVPN Community Edition](https://openvpn.net/community/). Use the MSVC
-Rust toolchain when building locally.
+Rust toolchain when building locally. RoutePilot requests administrator
+privileges at startup so OpenVPN can configure its virtual adapter, DNS, and
+system routes; approve the Windows UAC prompt.
 
 ## Getting started
 
@@ -111,6 +113,10 @@ on `PATH`, then run:
 ```powershell
 pnpm tauri dev
 ```
+
+Start the terminal as an administrator before running the development build.
+Windows does not allow an unelevated development process to directly launch the
+RoutePilot executable after it has been marked as requiring administrator access.
 
 If automatic detection does not find it, set the absolute executable path under
 **Settings → OpenVPN executable**.

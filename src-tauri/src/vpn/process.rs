@@ -5,6 +5,9 @@ use std::{ffi::OsString, path::PathBuf, process::Stdio};
 
 use tokio::{process::Child, sync::broadcast, task::JoinHandle, time::timeout};
 
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
 #[cfg(any(not(target_os = "macos"), test))]
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
@@ -405,6 +408,16 @@ fn openvpn_arguments(config: &OpenVpnLaunchConfig) -> Vec<OsString> {
         ]);
     }
 
+    // Alibaba Cloud SSL-VPN can complete its control-channel handshake while
+    // dropping all data traffic over ovpn-dco. TAP-Windows6 is slower but is
+    // compatible with those endpoints and with older OpenVPN servers.
+    #[cfg(target_os = "windows")]
+    arguments.extend([
+        OsString::from("--disable-dco"),
+        OsString::from("--windows-driver"),
+        OsString::from("tap-windows6"),
+    ]);
+
     arguments
 }
 
@@ -414,6 +427,9 @@ fn build_openvpn_command(config: &OpenVpnLaunchConfig) -> Result<Command, AppErr
     command
         .args(openvpn_arguments(config))
         .current_dir(&config.working_directory);
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
 
     Ok(command)
 }
@@ -548,6 +564,13 @@ mod tests {
         assert_eq!(arguments[4], "25001");
         assert_eq!(arguments[5], "--management-client");
         assert_eq!(arguments[6], "--management-query-passwords");
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            &arguments[7..],
+            ["--disable-dco", "--windows-driver", "tap-windows6"]
+        );
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(arguments.len(), 7);
     }
 
     #[test]
