@@ -487,17 +487,20 @@ fn stop_error(error: io::Error) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, time::Duration};
+    use std::{fs, path::Path};
+
+    #[cfg(unix)]
+    use std::time::Duration;
 
     use tempfile::TempDir;
+    #[cfg(unix)]
     use tokio::{process::Command, time::timeout};
 
     use crate::domain::ProfileId;
 
-    use super::{
-        openvpn_arguments, OpenVpnLaunchConfig, OpenVpnManagementOptions, OpenVpnProcess,
-        ProcessOutputStream, REDACTED_OUTPUT,
-    };
+    use super::{openvpn_arguments, OpenVpnLaunchConfig, OpenVpnManagementOptions};
+    #[cfg(unix)]
+    use super::{OpenVpnProcess, ProcessOutputStream, REDACTED_OUTPUT};
 
     fn create_executable(path: &Path, contents: &str) {
         fs::write(path, contents).expect("test executable should be written");

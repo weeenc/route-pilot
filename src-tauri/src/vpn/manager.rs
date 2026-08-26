@@ -551,12 +551,12 @@ fn management_error(error: std::io::Error) -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::Ipv4Addr;
 
     use tokio::net::TcpListener;
 
     #[cfg(unix)]
-    use std::{fs, time::Duration};
+    use std::{fs, net::IpAddr, time::Duration};
 
     #[cfg(unix)]
     use tempfile::TempDir;
@@ -578,9 +578,11 @@ mod tests {
         },
     };
 
+    use super::allocate_management_listener;
+    #[cfg(unix)]
+    use super::apply_state_update;
     #[cfg(unix)]
     use super::VpnManager;
-    use super::{allocate_management_listener, apply_state_update};
 
     #[tokio::test]
     async fn reserves_an_available_dynamic_loopback_port_until_process_start() {
