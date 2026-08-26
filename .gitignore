@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Frontend build output and caches
+dist/
+coverage/
+.vite/
+.vitest/
+*.tsbuildinfo
+
+# Rust and Tauri build output
+src-tauri/target/
+src-tauri/gen/
+**/*.rs.bk
+*.dSYM/
+
+# Generated macOS bundle resources
+src-tauri/resources/binaries/
+src-tauri/resources/routepilot-helper
+
+# Packaged application artifacts
+*.app/
+*.dmg
+*.msi
+*.msix
+*.AppImage
+
+# Local environment files (keep a shareable template if one is added)
+.env
+.env.*
+!.env.example
+
+# Logs and diagnostic output
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors and IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating system metadata
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini

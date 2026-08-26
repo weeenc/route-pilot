@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RoutePilot",
+  "version": "../package.json",
+  "identifier": "com.routepilot.client",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "scripts/prepare-macos-bundle.sh",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "RoutePilot",
+        "width": 1080,
+        "height": 720,
+        "minWidth": 900,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons-secure-route/32x32.png",
+      "icons-secure-route/128x128.png",
+      "icons-secure-route/128x128@2x.png",
+      "icons-secure-route/icon.icns",
+      "icons-secure-route/icon.ico"
+    ],
+    "resources": {
+      "resources/": ""
+    },
+    "macOS": {
+      "signingIdentity": "-"
+    },
+    "category": "Utility",
+    "shortDescription": "A modern OpenVPN desktop client"
+  }
+}
