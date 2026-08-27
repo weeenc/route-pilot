@@ -13,7 +13,7 @@
 </p>
 
 > [!IMPORTANT]
-> RoutePilot is currently at version 0.1.1. macOS builds are suitable for local
+> RoutePilot is currently at version 0.1.2. macOS builds are suitable for local
 > development and testing; review the [release checklist](./RELEASE_CHECKLIST.md)
 > before distributing an application bundle publicly.
 

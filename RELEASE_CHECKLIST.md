@@ -1,4 +1,4 @@
-# RoutePilot V0.1 release checklist
+# RoutePilot v0.1.2 release checklist
 
 ## Repeatable verification
 
@@ -14,7 +14,7 @@ pnpm tauri build
 The macOS build produces:
 
 - `src-tauri/target/release/bundle/macos/RoutePilot.app`
-- `src-tauri/target/release/bundle/dmg/RoutePilot_0.1.1_aarch64.dmg`
+- `src-tauri/target/release/bundle/dmg/RoutePilot_0.1.2_aarch64.dmg`
 
 Verify the generated artifacts:
 
@@ -22,7 +22,7 @@ Verify the generated artifacts:
 codesign --verify --deep --strict --verbose=2 \
   src-tauri/target/release/bundle/macos/RoutePilot.app
 hdiutil verify \
-  src-tauri/target/release/bundle/dmg/RoutePilot_0.1.1_aarch64.dmg
+  src-tauri/target/release/bundle/dmg/RoutePilot_0.1.2_aarch64.dmg
 ```
 
 ## OpenVPN runtime and macOS helper

@@ -13,7 +13,7 @@
 </p>
 
 > [!IMPORTANT]
-> RoutePilot 当前版本为 0.1.1。macOS 构建目前适合本地开发和测试；公开分发应用包前，
+> RoutePilot 当前版本为 0.1.2。macOS 构建目前适合本地开发和测试；公开分发应用包前，
 > 请先检查[发布清单](./RELEASE_CHECKLIST.md)。
 
 ## 功能特性
