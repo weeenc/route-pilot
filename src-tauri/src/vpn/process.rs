@@ -593,13 +593,15 @@ mod tests {
         fs::write(&config_path, "client\n").expect("test config should be written");
         let management =
             OpenVpnManagementOptions::new(25_001).expect("management options should be valid");
-        let mut config = OpenVpnLaunchConfig::new(
+        let config = OpenVpnLaunchConfig::new(
             ProfileId::new("vpn-a").expect("profile ID should be valid"),
             &executable,
             &config_path,
         )
         .expect("launch config should be valid")
         .with_management(management);
+        #[cfg(target_os = "windows")]
+        let mut config = config;
         #[cfg(target_os = "windows")]
         config.set_windows_device_name("RoutePilot-test");
 
