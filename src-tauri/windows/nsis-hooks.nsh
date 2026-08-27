@@ -19,7 +19,8 @@
   ${EndIf}
 
   DetailPrint "Installing the RoutePilot OpenVPN runtime..."
-  ExecWait '"$SYSDIR\msiexec.exe" /i "$INSTDIR\openvpn-runtime.msi" /qn /norestart ADDLOCAL=OpenVPN,Drivers,Drivers.TAPWindows6,Drivers.OvpnDco' $0
+  nsExec::ExecToLog '"$SYSDIR\msiexec.exe" /i "$INSTDIR\openvpn-runtime.msi" /qn /norestart ADDLOCAL=OpenVPN,Drivers,Drivers.TAPWindows6,Drivers.OvpnDco'
+  Pop $0
   Delete "$INSTDIR\openvpn-runtime.msi"
 
   ${If} $0 != 0
@@ -49,4 +50,41 @@
   ${EndIf}
 
   routepilot_openvpn_ready:
+  StrCpy $2 ""
+  ${If} ${FileExists} "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"
+    StrCpy $2 "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"
+  ${ElseIf} ${FileExists} "$PROGRAMFILES32\OpenVPN\bin\tapctl.exe"
+    StrCpy $2 "$PROGRAMFILES32\OpenVPN\bin\tapctl.exe"
+  ${EndIf}
+  ${If} $2 != ""
+    DetailPrint "Preparing the RoutePilot TAP adapter pool..."
+    StrCpy $3 1
+    routepilot_create_tap_loop:
+      IntCmp $3 3 routepilot_create_tap_done
+      nsExec::ExecToLog '"$2" create --name "RoutePilot TAP $3" --hwid tap0901'
+      Pop $4
+      IntOp $3 $3 + 1
+      Goto routepilot_create_tap_loop
+    routepilot_create_tap_done:
+  ${EndIf}
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  StrCpy $0 ""
+  ${If} ${FileExists} "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"
+    StrCpy $0 "$PROGRAMFILES64\OpenVPN\bin\tapctl.exe"
+  ${ElseIf} ${FileExists} "$PROGRAMFILES32\OpenVPN\bin\tapctl.exe"
+    StrCpy $0 "$PROGRAMFILES32\OpenVPN\bin\tapctl.exe"
+  ${EndIf}
+  ${If} $0 != ""
+    DetailPrint "Removing the RoutePilot TAP adapter pool..."
+    StrCpy $1 1
+    routepilot_remove_tap_loop:
+      IntCmp $1 17 routepilot_remove_tap_done
+      nsExec::ExecToLog '"$0" delete "RoutePilot TAP $1"'
+      Pop $2
+      IntOp $1 $1 + 1
+      Goto routepilot_remove_tap_loop
+    routepilot_remove_tap_done:
+  ${EndIf}
 !macroend

@@ -93,6 +93,8 @@ pub struct OpenVpnLaunchConfig {
     #[cfg(any(not(target_os = "macos"), test))]
     #[cfg_attr(all(target_os = "macos", test), allow(dead_code))]
     working_directory: PathBuf,
+    #[cfg(target_os = "windows")]
+    windows_device_name: Option<OsString>,
     management: Option<OpenVpnManagementOptions>,
 }
 
@@ -135,6 +137,8 @@ impl OpenVpnLaunchConfig {
             config_path,
             #[cfg(any(not(target_os = "macos"), test))]
             working_directory,
+            #[cfg(target_os = "windows")]
+            windows_device_name: None,
             management: None,
         })
     }
@@ -149,6 +153,11 @@ impl OpenVpnLaunchConfig {
     pub fn profile_id(&self) -> &ProfileId {
         &self.profile_id
     }
+
+    #[cfg(target_os = "windows")]
+    fn set_windows_device_name(&mut self, device_name: &str) {
+        self.windows_device_name = Some(OsString::from(device_name));
+    }
 }
 
 /// Handle for one child OpenVPN process.
@@ -161,6 +170,8 @@ pub struct OpenVpnProcess {
     child: Option<Child>,
     #[cfg(target_os = "macos")]
     helper: Option<super::privileged_helper::HelperProcessClient>,
+    #[cfg(target_os = "windows")]
+    windows_adapter: Option<super::windows_adapter::WindowsTapAdapter>,
     output_sender: broadcast::Sender<ProcessOutput>,
     initial_output_receiver: Option<broadcast::Receiver<ProcessOutput>>,
     stdout_task: Option<JoinHandle<()>>,
@@ -197,9 +208,33 @@ impl OpenVpnProcess {
 
         #[cfg(not(target_os = "macos"))]
         {
+            #[cfg(target_os = "windows")]
+            let mut config = config;
+            #[cfg(target_os = "windows")]
+            let windows_adapter = {
+                let adapter =
+                    super::windows_adapter::WindowsTapAdapter::acquire(&config.executable).await?;
+                config.set_windows_device_name(adapter.name());
+                adapter
+            };
             let profile_id = config.profile_id.clone();
             let command = build_openvpn_command(&config)?;
-            Self::spawn_command(profile_id, command).await
+            let process = Self::spawn_command(profile_id, command).await;
+            #[cfg(target_os = "windows")]
+            {
+                match process {
+                    Ok(mut process) => {
+                        process.windows_adapter = Some(windows_adapter);
+                        Ok(process)
+                    }
+                    Err(error) => {
+                        drop(windows_adapter);
+                        Err(error)
+                    }
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            process
         }
     }
 
@@ -265,6 +300,8 @@ impl OpenVpnProcess {
     pub async fn stop(&mut self) -> Result<ProcessExit, AppError> {
         if let Some(exit) = self.exit {
             self.finish_output_tasks().await;
+            #[cfg(target_os = "windows")]
+            self.windows_adapter.take();
             return Ok(exit);
         }
 
@@ -308,6 +345,8 @@ impl OpenVpnProcess {
         let exit = ProcessExit::from(status);
         self.exit = Some(exit);
         self.finish_output_tasks().await;
+        #[cfg(target_os = "windows")]
+        self.windows_adapter.take();
         Ok(exit)
     }
 
@@ -361,6 +400,8 @@ impl OpenVpnProcess {
             child: Some(child),
             #[cfg(target_os = "macos")]
             helper: None,
+            #[cfg(target_os = "windows")]
+            windows_adapter: None,
             output_sender,
             initial_output_receiver: Some(output_receiver),
             stdout_task: Some(stdout_task),
@@ -416,7 +457,17 @@ fn openvpn_arguments(config: &OpenVpnLaunchConfig) -> Vec<OsString> {
         OsString::from("--disable-dco"),
         OsString::from("--windows-driver"),
         OsString::from("tap-windows6"),
+        // OpenVPN otherwise inserts a fixed five-second delay for TAP's
+        // simulated DHCP path. Polling readiness keeps DNS compatibility and
+        // proceeds as soon as the adapter is usable on modern Windows.
+        OsString::from("--route-delay"),
+        OsString::from("0"),
+        OsString::from("5"),
     ]);
+    #[cfg(target_os = "windows")]
+    if let Some(device_name) = &config.windows_device_name {
+        arguments.extend([OsString::from("--dev-node"), device_name.clone()]);
+    }
 
     arguments
 }
@@ -549,6 +600,10 @@ mod tests {
         )
         .expect("launch config should be valid")
         .with_management(management);
+        #[cfg(target_os = "windows")]
+        let mut config = config;
+        #[cfg(target_os = "windows")]
+        config.set_windows_device_name("RoutePilot-test");
 
         let canonical_config =
             fs::canonicalize(&config_path).expect("config path should canonicalize");
@@ -567,7 +622,16 @@ mod tests {
         #[cfg(target_os = "windows")]
         assert_eq!(
             &arguments[7..],
-            ["--disable-dco", "--windows-driver", "tap-windows6"]
+            [
+                "--disable-dco",
+                "--windows-driver",
+                "tap-windows6",
+                "--route-delay",
+                "0",
+                "5",
+                "--dev-node",
+                "RoutePilot-test"
+            ]
         );
         #[cfg(not(target_os = "windows"))]
         assert_eq!(arguments.len(), 7);

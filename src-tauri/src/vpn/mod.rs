@@ -10,3 +10,5 @@ pub mod parser;
 pub mod privileged_helper;
 pub mod process;
 pub mod routing;
+#[cfg(target_os = "windows")]
+pub(crate) mod windows_adapter;
