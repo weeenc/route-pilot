@@ -29,8 +29,8 @@
   default route.
 - Connect and disconnect from the system tray; closing the main window keeps
   RoutePilot available in the tray.
-- Locate OpenVPN from the app bundle, a custom path, `PATH`, or common install
-  locations.
+- Provision OpenVPN with the packaged application; custom paths remain available
+  for development and troubleshooting.
 - Switch between English and Simplified Chinese interfaces.
 - Use a restricted macOS privileged helper so administrator approval is needed
   once instead of for every connection.
@@ -40,10 +40,11 @@
 | Platform | Status | Notes |
 | --- | --- | --- |
 | macOS | Supported | Uses the bundled, root-owned helper and OpenVPN runtime. |
-| Windows | Supported | Uses an installed OpenVPN 2.x executable with administrator privileges. |
+| Windows | Supported | The RoutePilot installer provisions OpenVPN 2.x and its network driver automatically. |
 | Linux | Not supported | The current runtime explicitly disables unsupported platform paths. |
 
-CI runs the full verification suite on both macOS and Windows.
+CI runs the full verification suite on both macOS and Windows and builds the
+Windows NSIS installer with a checksum-pinned OpenVPN runtime.
 
 ## Technology stack
 
@@ -62,7 +63,8 @@ Install the following before working on the project:
 - Rust 1.77.2 or newer
 - The [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/)
   for your operating system
-- OpenVPN 2.x
+- OpenVPN 2.x for local VPN development; packaged installers provision their own
+  pinned runtime
 
 On macOS, install the native dependencies used by the development runtime and
 bundle preparation script:
@@ -72,11 +74,11 @@ xcode-select --install
 brew install openvpn lzo lz4 pkcs11-helper openssl@3
 ```
 
-On Windows, install the Microsoft C++ Build Tools, WebView2 when required, and
-the [OpenVPN Community Edition](https://openvpn.net/community/). Use the MSVC
-Rust toolchain when building locally. RoutePilot requests administrator
-privileges at startup so OpenVPN can configure its virtual adapter, DNS, and
-system routes; approve the Windows UAC prompt.
+On Windows, install the Microsoft C++ Build Tools and WebView2 when required.
+Install [OpenVPN Community Edition](https://openvpn.net/community/) only when
+running a development build. Use the MSVC Rust toolchain when building locally.
+RoutePilot requests administrator privileges at startup so OpenVPN can configure
+its virtual adapter, DNS, and system routes; approve the Windows UAC prompt.
 
 ## Getting started
 
@@ -107,8 +109,9 @@ The preparation script supports custom build inputs through the
 
 ### Windows
 
-Make sure `openvpn.exe` is installed in a standard OpenVPN location or available
-on `PATH`, then run:
+Development builds do not run the installer prerequisite, so make sure
+`openvpn.exe` is installed in a standard OpenVPN location or available on
+`PATH`, then run:
 
 ```powershell
 pnpm tauri dev
@@ -147,9 +150,19 @@ pnpm tauri build
 ```
 
 Native installers should be built on their target operating system. The macOS
-bundle step embeds and signs the selected OpenVPN runtime; public distribution
-also requires an Apple Developer ID signature, notarization, and the helper
-registration changes described in the [release checklist](./RELEASE_CHECKLIST.md).
+bundle step embeds and signs the selected OpenVPN runtime. A Windows build
+requires an official OpenVPN Community MSI and its expected SHA-256 digest:
+
+```powershell
+$env:ROUTEPILOT_OPENVPN_MSI = (Resolve-Path .\OpenVPN-runtime.msi).Path
+$env:ROUTEPILOT_OPENVPN_MSI_SHA256 = (Get-FileHash $env:ROUTEPILOT_OPENVPN_MSI -Algorithm SHA256).Hash
+pnpm tauri build
+```
+
+Windows builds produce an NSIS installer that silently provisions only the
+OpenVPN core and network drivers. End users do not install OpenVPN separately.
+Review signing, third-party notices, and platform release requirements in the
+[release checklist](./RELEASE_CHECKLIST.md).
 
 ## Verification
 

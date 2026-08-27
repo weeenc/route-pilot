@@ -69,5 +69,37 @@ LaunchDaemons registered this way to be code signed and notarized.
 
 The Windows Rust target alone is not sufficient on macOS. Cross-checking the
 Tauri application also requires a Windows resource compiler such as `llvm-rc`.
-For release candidates, build and test the NSIS/MSI installer on a Windows CI
+For release candidates, build and test the NSIS installer on a Windows CI
 runner with the MSVC and WebView2 prerequisites installed.
+
+Download a signed OpenVPN Community MSI from the official release channel and
+pin that exact artifact for the RoutePilot build:
+
+```powershell
+$env:ROUTEPILOT_OPENVPN_MSI = (Resolve-Path .\OpenVPN-runtime.msi).Path
+$env:ROUTEPILOT_OPENVPN_MSI_SHA256 = (Get-FileHash $env:ROUTEPILOT_OPENVPN_MSI -Algorithm SHA256).Hash
+pnpm tauri build
+```
+
+The bundle preparation step rejects a missing MSI, checksum mismatch, or invalid
+Windows Authenticode signature. The NSIS installer then installs the `OpenVPN`,
+`Drivers`, `Drivers.TAPWindows6`,
+and `Drivers.OvpnDco` MSI features without the separate OpenVPN GUI. RoutePilot
+uses the resulting `Program Files\OpenVPN\bin\openvpn.exe` through its existing
+runtime locator.
+
+On a clean Windows VM with no prior OpenVPN installation, verify that:
+
+- only the RoutePilot installer needs to be launched by the user;
+- `Program Files\OpenVPN\bin\openvpn.exe` and a usable network driver are
+  present afterward;
+- two profiles can connect concurrently;
+- DNS and routes are removed after normal disconnect, forced process exit, and
+  RoutePilot uninstall;
+- installer exit codes `0`, `3010`, and `1638` complete successfully, while an
+  actual OpenVPN MSI failure stops installation.
+
+RoutePilot does not automatically remove the shared OpenVPN runtime when it is
+uninstalled, because another VPN client may be using it. Document this in the
+release notes. Ship the required OpenVPN and bundled-library license notices and
+meet all corresponding-source obligations.

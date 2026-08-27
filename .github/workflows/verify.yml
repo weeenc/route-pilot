@@ -26,6 +26,24 @@ jobs:
           components: clippy,rustfmt
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+      - name: Download pinned OpenVPN runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "OpenVPN-2.7.6-I001-amd64.msi"
+          $expected = "48c96ac092a81c6303f059eace51c7bf878794e9575b329e82894848e0e529fc"
+          Invoke-WebRequest `
+            -Uri "https://swupdate.openvpn.org/community/releases/OpenVPN-2.7.6-I001-amd64.msi" `
+            -OutFile $source
+          $actual = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "OpenVPN MSI checksum mismatch: expected $expected, received $actual"
+          }
+          "ROUTEPILOT_OPENVPN_MSI=$source" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ROUTEPILOT_OPENVPN_MSI_SHA256=$expected" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build Windows installer with managed OpenVPN runtime
+        if: runner.os == 'Windows'
+        run: pnpm tauri build
 
   audit:
     runs-on: ubuntu-latest

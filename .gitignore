@@ -19,6 +19,9 @@ src-tauri/gen/
 src-tauri/resources/binaries/
 src-tauri/resources/routepilot-helper
 
+# Generated Windows bundle resource
+src-tauri/resources/openvpn-runtime.msi
+
 # Packaged application artifacts
 *.app/
 *.dmg

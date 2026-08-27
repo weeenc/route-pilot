@@ -1,5 +1,11 @@
 {
-  "build": {
-    "beforeBundleCommand": null
+  "bundle": {
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "windows/nsis-hooks.nsh"
+      }
+    }
   }
 }

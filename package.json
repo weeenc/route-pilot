@@ -11,10 +11,11 @@
     "check:version": "node scripts/check-version.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
     "test:frontend": "vitest run",
+    "test:scripts": "node --test scripts/*.node-test.mjs",
     "format:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
     "audit": "pnpm audit --prod && cargo audit --file src-tauri/Cargo.lock",
-    "verify": "pnpm check:version && pnpm typecheck && pnpm test:frontend && vite build && pnpm format:check && pnpm lint:rust && cargo test --manifest-path src-tauri/Cargo.toml",
+    "verify": "pnpm check:version && pnpm typecheck && pnpm test:frontend && pnpm test:scripts && vite build && pnpm format:check && pnpm lint:rust && cargo test --manifest-path src-tauri/Cargo.toml",
     "tauri": "node scripts/run-tauri.mjs"
   },
   "dependencies": {

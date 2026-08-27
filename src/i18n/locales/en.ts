@@ -142,7 +142,7 @@ export default {
   settings: {
     eyebrow: "Application",
     title: "Settings",
-    description: "Configure RoutePilot for your local OpenVPN installation.",
+    description: "Configure RoutePilot and its managed OpenVPN runtime.",
     language: {
       title: "Language",
       sectionTitle: "Interface",
@@ -185,7 +185,7 @@ export default {
         "System helper enabled. Future VPN connections will not ask for an administrator password.",
     },
     openVpn: {
-      title: "OpenVPN executable",
+      title: "OpenVPN runtime",
       configuredLocally: "Configured locally",
       description:
         "RoutePilot checks its bundled binary, your custom path, PATH, and common installation folders.",
@@ -193,12 +193,14 @@ export default {
       notDetected: "OpenVPN not detected",
       checkAgain: "Check again",
       customPath: "Custom path",
-      customPathDescription: "Leave blank to locate an available OpenVPN automatically.",
+      customPathDescription:
+        "Packaged builds configure OpenVPN automatically. Set a path only for development or troubleshooting.",
       automaticPlaceholder: "Use automatic detection",
       useAutomatic: "Use automatic detection",
       saving: "Saving…",
       savePath: "Save path",
-      notFound: "OpenVPN was not found. Enter the full executable path below.",
+      notFound:
+        "The managed OpenVPN runtime was not found. Reinstall RoutePilot or provide a custom executable for troubleshooting.",
       customSaved: "Custom executable saved.",
       automaticEnabled: "Automatic detection enabled.",
       desktopOnly: "Executable detection is available in the RoutePilot desktop app.",
