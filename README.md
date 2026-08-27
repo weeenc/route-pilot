@@ -159,10 +159,12 @@ $env:ROUTEPILOT_OPENVPN_MSI_SHA256 = (Get-FileHash $env:ROUTEPILOT_OPENVPN_MSI -
 pnpm tauri build
 ```
 
-Windows builds produce an NSIS installer that silently provisions only the
-OpenVPN core and network drivers. End users do not install OpenVPN separately.
-Review signing, third-party notices, and platform release requirements in the
-[release checklist](./RELEASE_CHECKLIST.md).
+Windows builds produce an NSIS installer that reuses an OpenVPN installation in
+a standard Program Files location when a TAP or DCO driver is available. When a
+compatible installation is not found, it silently provisions only the OpenVPN
+core and network drivers. End users do not install OpenVPN separately. Review
+signing, third-party notices, and platform release requirements in the [release
+checklist](./RELEASE_CHECKLIST.md).
 
 ## Verification
 

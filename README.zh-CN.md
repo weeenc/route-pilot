@@ -139,8 +139,9 @@ $env:ROUTEPILOT_OPENVPN_MSI_SHA256 = (Get-FileHash $env:ROUTEPILOT_OPENVPN_MSI -
 pnpm tauri build
 ```
 
-Windows 只生成 NSIS 安装包；安装过程会静默配置 OpenVPN 核心和网络驱动，最终用户无需再
-单独安装 OpenVPN。签名、第三方声明以及各平台发布要求见
+Windows 只生成 NSIS 安装包；如果标准 Program Files 目录中已有 OpenVPN，并且 TAP 或 DCO
+驱动可用，安装程序会直接复用。否则，安装过程会静默配置 OpenVPN 核心和网络驱动，最终
+用户无需再单独安装 OpenVPN。签名、第三方声明以及各平台发布要求见
 [发布清单](./RELEASE_CHECKLIST.md)。
 
 ## 验证
