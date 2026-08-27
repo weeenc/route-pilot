@@ -30,6 +30,11 @@ pub fn run() {
             let profiles = profile_store.list_profiles()?;
             let settings_store = SettingsStore::new(app_data_dir)?;
             let openvpn_locator = OpenVpnLocator::new(resource_dir);
+            #[cfg(target_os = "windows")]
+            let windows_openvpn = openvpn_locator
+                .locate(settings_store.get().openvpn_executable.as_deref())
+                .ok()
+                .map(|located| located.path);
             let vpn_manager = VpnManager::new();
             let mut connection_events = vpn_manager.subscribe();
             app.manage(AppState::new(
@@ -60,6 +65,12 @@ pub fn run() {
                     }
                 }
             });
+            #[cfg(target_os = "windows")]
+            if let Some(executable) = windows_openvpn {
+                tauri::async_runtime::spawn(async move {
+                    let _ = vpn::windows_adapter::prewarm(&executable, 2).await;
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

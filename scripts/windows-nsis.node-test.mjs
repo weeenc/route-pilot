@@ -17,7 +17,9 @@ test("reuses a standard OpenVPN installation with a network driver", () => {
   const existingDriverCheck = hook.indexOf(
     'ReadRegStr $1 HKLM "SYSTEM\\CurrentControlSet\\Services\\ovpn-dco"',
   );
-  const installCommand = hook.indexOf('ExecWait \'"$SYSDIR\\msiexec.exe"');
+  const installCommand = hook.indexOf(
+    'nsExec::ExecToLog \'"$SYSDIR\\msiexec.exe"',
+  );
 
   assert.notEqual(existingRuntimeCheck, -1);
   assert.notEqual(existingDriverCheck, -1);
@@ -37,4 +39,16 @@ test("requires an OpenVPN executable and network driver after installation", () 
   assert.match(hook, /The OpenVPN runtime was not found after installation/);
   assert.match(hook, /An OpenVPN network driver was not found after installation/);
   assert.match(hook, /Services\\tap0901/);
+});
+
+test("prepares and removes the persistent RoutePilot TAP adapter pool", () => {
+  assert.match(hook, /NSIS_HOOK_POSTINSTALL/);
+  assert.match(hook, /create --name "RoutePilot TAP \$3" --hwid tap0901/);
+  assert.match(hook, /NSIS_HOOK_PREUNINSTALL/);
+  assert.match(hook, /delete "RoutePilot TAP \$1"/);
+});
+
+test("runs every installer child process without a console window", () => {
+  assert.doesNotMatch(hook, /\bExecWait\b/);
+  assert.equal(hook.match(/nsExec::ExecToLog/g)?.length, 3);
 });

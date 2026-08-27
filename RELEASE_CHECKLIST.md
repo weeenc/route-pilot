@@ -94,7 +94,12 @@ On a clean Windows VM with no prior OpenVPN installation, verify that:
 - only the RoutePilot installer needs to be launched by the user;
 - `Program Files\OpenVPN\bin\openvpn.exe` and a usable network driver are
   present afterward;
+- the installer creates the persistent `RoutePilot TAP 1` and
+  `RoutePilot TAP 2` adapter pool, and uninstall removes RoutePilot pool
+  adapters without removing the shared OpenVPN runtime;
 - two profiles can connect concurrently;
+- TAP connections do not incur OpenVPN's legacy fixed five-second DHCP route
+  delay and still wait for actual adapter readiness before adding routes;
 - DNS and routes are removed after normal disconnect, forced process exit, and
   RoutePilot uninstall;
 - installer exit codes `0`, `3010`, and `1638` complete successfully, while an
