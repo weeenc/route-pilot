@@ -17,6 +17,7 @@ import type {
   OpenVpnSource,
   PrivilegedHelperStatus,
 } from "../types/settings";
+import { shouldShowPrivilegedHelperSettings } from "../utils/platformSettings";
 import { appVersion } from "../version";
 
 const { t, locale } = useI18n();
@@ -44,6 +45,9 @@ const successMessage = computed(() =>
 );
 const helperSuccess = computed(() =>
   helperSuccessKey.value ? t(helperSuccessKey.value) : "",
+);
+const showHelperSettings = computed(
+  () => shouldShowPrivilegedHelperSettings(helperStatus.value),
 );
 
 function handleLocaleChange(event: Event): void {
@@ -202,7 +206,11 @@ onMounted(async () => {
         </div>
       </section>
 
-      <section class="settings-section" aria-labelledby="helper-settings-title">
+      <section
+        v-if="showHelperSettings"
+        class="settings-section"
+        aria-labelledby="helper-settings-title"
+      >
         <header>
           <h2 id="helper-settings-title">{{ t("settings.helper.title") }}</h2>
           <p>{{ t("settings.helper.description") }}</p>
