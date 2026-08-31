@@ -2,6 +2,7 @@ export type OpenVpnSource = "bundled" | "custom" | "path" | "common";
 
 export interface AppSettings {
   openvpnExecutable: string | null;
+  checkForUpdatesOnStartup: boolean;
 }
 
 export interface LocatedOpenVpn {

@@ -13,6 +13,12 @@ export default {
     readyForSetup: "等待配置",
     version: "RoutePilot v{version}",
   },
+  updates: {
+    availableTitle: "发现 RoutePilot {version}",
+    availableDescription: "当前版本为 {current}，GitHub 上已有新版本。",
+    viewRelease: "前往下载",
+    dismiss: "关闭更新提示",
+  },
   connections: {
     eyebrow: "VPN 工作区",
     title: "连接",
@@ -207,6 +213,19 @@ export default {
       title: "关于 RoutePilot",
       description: "一款专注、跨平台的 OpenVPN 桌面客户端。",
       version: "版本 {version}",
+      updates: {
+        automatic: "自动检查更新",
+        automaticDescription: "应用启动时检查 GitHub 上是否有新版本。",
+        description: "从 RoutePilot 的 GitHub Releases 检查最新稳定版本。",
+        checking: "正在检查更新…",
+        checkingButton: "检查中…",
+        current: "当前已是最新版本",
+        available: "新版本 {version} 可用",
+        availableDescription: "可前往 GitHub 查看发布说明并下载安装包。",
+        failed: "暂时无法检查更新",
+        check: "检查更新",
+        viewRelease: "前往下载",
+      },
     },
   },
   dialogs: {
