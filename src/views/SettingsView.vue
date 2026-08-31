@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -9,6 +10,7 @@ import {
   getSettings,
   isDesktopRuntime,
   locateOpenVpn,
+  setCheckForUpdatesOnStartup,
   setOpenVpnExecutable,
 } from "../api/settings";
 import { setLocale, supportedLocales, type SupportedLocale } from "../i18n";
@@ -17,6 +19,7 @@ import type {
   OpenVpnSource,
   PrivilegedHelperStatus,
 } from "../types/settings";
+import { useUpdateStore } from "../stores/update";
 import { shouldShowPrivilegedHelperSettings } from "../utils/platformSettings";
 import { appVersion } from "../version";
 
@@ -32,6 +35,12 @@ const isHelperLoading = ref(isDesktopRuntime);
 const isEnablingHelper = ref(false);
 const helperError = ref("");
 const helperSuccessKey = ref("");
+const manualUpdateCheck = ref(false);
+const checkForUpdatesOnStartup = ref(true);
+const isSavingUpdatePreference = ref(false);
+const updatePreferenceError = ref("");
+const updateStore = useUpdateStore();
+const { latestRelease, status: updateStatus } = storeToRefs(updateStore);
 
 const sourceLabelKeys: Record<OpenVpnSource, string> = {
   bundled: "settings.openVpn.sources.bundled",
@@ -49,6 +58,57 @@ const helperSuccess = computed(() =>
 const showHelperSettings = computed(
   () => shouldShowPrivilegedHelperSettings(helperStatus.value),
 );
+const updateStatusTitle = computed(() => {
+  switch (updateStatus.value) {
+    case "checking":
+      return t("settings.about.updates.checking");
+    case "available":
+      return t("settings.about.updates.available", {
+        version: latestRelease.value?.version ?? "",
+      });
+    case "current":
+      return t("settings.about.updates.current");
+    case "error":
+      return manualUpdateCheck.value
+        ? t("settings.about.updates.failed")
+        : t("settings.about.updates.automatic");
+    default:
+      return t("settings.about.updates.automatic");
+  }
+});
+const updateStatusDescription = computed(() =>
+  updateStatus.value === "available"
+    ? t("settings.about.updates.availableDescription")
+    : t("settings.about.updates.description"),
+);
+
+async function handleUpdateAction(): Promise<void> {
+  if (updateStatus.value === "available") {
+    await updateStore.openLatestRelease();
+    return;
+  }
+
+  manualUpdateCheck.value = true;
+  await updateStore.checkForUpdates(true);
+}
+
+async function handleAutomaticUpdateChange(event: Event): Promise<void> {
+  const previousValue = checkForUpdatesOnStartup.value;
+  const enabled = (event.target as HTMLInputElement).checked;
+  checkForUpdatesOnStartup.value = enabled;
+  isSavingUpdatePreference.value = true;
+  updatePreferenceError.value = "";
+
+  try {
+    const settings = await setCheckForUpdatesOnStartup(enabled);
+    checkForUpdatesOnStartup.value = settings.checkForUpdatesOnStartup;
+  } catch (error: unknown) {
+    checkForUpdatesOnStartup.value = previousValue;
+    updatePreferenceError.value = normalizeAppError(error).message;
+  } finally {
+    isSavingUpdatePreference.value = false;
+  }
+}
 
 function handleLocaleChange(event: Event): void {
   setLocale((event.target as HTMLSelectElement).value as SupportedLocale);
@@ -160,6 +220,7 @@ onMounted(async () => {
   try {
     const [settings] = await Promise.all([getSettings(), refreshHelperStatus()]);
     customPath.value = settings.openvpnExecutable ?? "";
+    checkForUpdatesOnStartup.value = settings.checkForUpdatesOnStartup;
     await refreshLocation();
   } catch (error: unknown) {
     errorMessage.value = normalizeAppError(error).message;
@@ -344,7 +405,55 @@ onMounted(async () => {
             </span>
             <span class="version">{{ t("settings.about.version", { version: appVersion }) }}</span>
           </div>
+          <label class="settings-row" for="automatic-update-check">
+            <span class="settings-row__label">
+              <strong>{{ t("settings.about.updates.automatic") }}</strong>
+              <small>{{ t("settings.about.updates.automaticDescription") }}</small>
+            </span>
+            <span class="toggle-control">
+              <input
+                id="automatic-update-check"
+                type="checkbox"
+                :checked="checkForUpdatesOnStartup"
+                :disabled="!isDesktopRuntime || isSavingUpdatePreference"
+                @change="handleAutomaticUpdateChange"
+              />
+              <span aria-hidden="true"></span>
+            </span>
+          </label>
+          <div class="settings-row settings-row--status">
+            <span
+              class="settings-status-dot"
+              :class="{
+                'settings-status-dot--ready': updateStatus === 'current',
+                'settings-status-dot--warning': updateStatus === 'available',
+                'settings-status-dot--error': updateStatus === 'error' && manualUpdateCheck,
+              }"
+              aria-hidden="true"
+            ></span>
+            <span class="settings-row__label">
+              <strong>{{ updateStatusTitle }}</strong>
+              <small>{{ updateStatusDescription }}</small>
+            </span>
+            <button
+              class="button button--secondary button--small"
+              type="button"
+              :disabled="updateStatus === 'checking'"
+              @click="handleUpdateAction"
+            >
+              {{
+                updateStatus === "checking"
+                  ? t("settings.about.updates.checkingButton")
+                  : updateStatus === "available"
+                    ? t("settings.about.updates.viewRelease")
+                    : t("settings.about.updates.check")
+              }}
+            </button>
+          </div>
         </div>
+        <p v-if="updatePreferenceError" class="form-message form-message--error" role="alert">
+          {{ updatePreferenceError }}
+        </p>
       </section>
     </div>
   </section>

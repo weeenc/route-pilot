@@ -219,6 +219,66 @@ svg {
   padding: 28px 32px 40px;
 }
 
+.update-banner {
+  display: flex;
+  width: 100%;
+  max-width: 1000px;
+  min-height: 58px;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+  background: var(--primary-50);
+  color: var(--primary-800);
+  box-shadow: var(--shadow-card);
+}
+
+.update-banner__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--primary-100);
+}
+
+.update-banner__icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.update-banner__content {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.update-banner__content strong {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 650;
+}
+
+.update-banner__content small {
+  color: var(--primary-700);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.update-banner__close {
+  flex: 0 0 34px;
+  color: var(--primary-700);
+}
+
 .menu-button,
 .navigation-backdrop {
   display: none;
@@ -1382,6 +1442,11 @@ h1 {
   box-shadow: 0 0 0 3px var(--danger-bg);
 }
 
+.settings-status-dot--warning {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-bg);
+}
+
 .select-control {
   position: relative;
   display: flex;
@@ -1411,6 +1476,61 @@ h1 {
   stroke-linejoin: round;
   stroke-width: 1.7;
   pointer-events: none;
+}
+
+.toggle-control {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 38px;
+}
+
+.toggle-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.toggle-control span {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--gray-400);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.toggle-control span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.2);
+  content: "";
+  transition: transform 150ms ease;
+}
+
+.toggle-control input:checked + span {
+  background: var(--primary-600);
+}
+
+.toggle-control input:checked + span::after {
+  transform: translateX(16px);
+}
+
+.toggle-control input:focus-visible + span {
+  box-shadow: var(--focus-ring);
+}
+
+.toggle-control input:disabled + span {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings-panel__actions {

@@ -16,6 +16,10 @@ export function setOpenVpnExecutable(path: string | null): Promise<AppSettings> 
   return invoke<AppSettings>("set_openvpn_executable", { path });
 }
 
+export function setCheckForUpdatesOnStartup(enabled: boolean): Promise<AppSettings> {
+  return invoke<AppSettings>("set_check_for_updates_on_startup", { enabled });
+}
+
 export function locateOpenVpn(): Promise<LocatedOpenVpn> {
   return invoke<LocatedOpenVpn>("locate_openvpn");
 }

@@ -51,6 +51,21 @@ pub async fn set_openvpn_executable(
 }
 
 #[tauri::command]
+pub async fn set_check_for_updates_on_startup(
+    enabled: bool,
+    app: AppHandle,
+) -> Result<AppSettings, ErrorPayload> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        settings_store(state.inner())?
+            .set_check_for_updates_on_startup(enabled)
+            .map_err(|error| error.to_payload())
+    })
+    .await
+    .map_err(blocking_task_error)?
+}
+
+#[tauri::command]
 pub async fn locate_openvpn(app: AppHandle) -> Result<LocatedOpenVpn, ErrorPayload> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
