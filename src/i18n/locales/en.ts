@@ -13,6 +13,12 @@ export default {
     readyForSetup: "Ready for setup",
     version: "RoutePilot v{version}",
   },
+  updates: {
+    availableTitle: "RoutePilot {version} is available",
+    availableDescription: "You're using {current}. A newer release is available on GitHub.",
+    viewRelease: "View release",
+    dismiss: "Dismiss update notification",
+  },
   connections: {
     eyebrow: "VPN workspace",
     title: "Connections",
@@ -215,6 +221,19 @@ export default {
       title: "About RoutePilot",
       description: "A focused, cross-platform OpenVPN desktop client.",
       version: "Version {version}",
+      updates: {
+        automatic: "Automatic update checks",
+        automaticDescription: "Check GitHub for a newer version when the app starts.",
+        description: "Checks RoutePilot's GitHub Releases for the latest stable version.",
+        checking: "Checking for updates…",
+        checkingButton: "Checking…",
+        current: "RoutePilot is up to date",
+        available: "Version {version} is available",
+        availableDescription: "View the release notes and download the installer from GitHub.",
+        failed: "Unable to check for updates right now",
+        check: "Check for updates",
+        viewRelease: "View release",
+      },
     },
   },
   dialogs: {

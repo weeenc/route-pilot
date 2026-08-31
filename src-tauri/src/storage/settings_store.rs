@@ -20,10 +20,25 @@ const TEMPORARY_PREFIX: &str = ".settings-";
 const TEMPORARY_SUFFIX: &str = ".tmp";
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub openvpn_executable: Option<PathBuf>,
+    #[serde(default = "enabled_by_default")]
+    pub check_for_updates_on_startup: bool,
+}
+
+const fn enabled_by_default() -> bool {
+    true
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            openvpn_executable: None,
+            check_for_updates_on_startup: true,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -76,9 +91,19 @@ impl SettingsStore {
         &mut self,
         path: Option<PathBuf>,
     ) -> Result<AppSettings, AppError> {
-        let next_settings = AppSettings {
-            openvpn_executable: path,
-        };
+        let mut next_settings = self.settings.clone();
+        next_settings.openvpn_executable = path;
+        self.persist(&next_settings)?;
+        self.settings = next_settings;
+        Ok(self.settings.clone())
+    }
+
+    pub fn set_check_for_updates_on_startup(
+        &mut self,
+        enabled: bool,
+    ) -> Result<AppSettings, AppError> {
+        let mut next_settings = self.settings.clone();
+        next_settings.check_for_updates_on_startup = enabled;
         self.persist(&next_settings)?;
         self.settings = next_settings;
         Ok(self.settings.clone())
@@ -169,6 +194,7 @@ mod tests {
             .expect("settings store should initialize");
 
         assert_eq!(store.get().openvpn_executable, None);
+        assert!(store.get().check_for_updates_on_startup);
     }
 
     #[test]
@@ -193,6 +219,7 @@ mod tests {
             .expect("existing settings should be replaced");
         let reloaded = SettingsStore::new(app_data.clone()).expect("settings should reload");
         assert_eq!(reloaded.get().openvpn_executable, Some(replacement));
+        assert!(reloaded.get().check_for_updates_on_startup);
 
         let temporary_files = fs::read_dir(app_data)
             .expect("app data should be readable")
@@ -205,6 +232,48 @@ mod tests {
             })
             .count();
         assert_eq!(temporary_files, 0);
+    }
+
+    #[test]
+    fn persists_the_automatic_update_preference_and_preserves_other_settings() {
+        let workspace = TempDir::new().expect("temporary directory should be created");
+        let app_data = workspace.path().join("app-data");
+        let executable = PathBuf::from("/opt/openvpn/bin/openvpn");
+        let mut store =
+            SettingsStore::new(app_data.clone()).expect("settings store should initialize");
+        store
+            .set_openvpn_executable(Some(executable.clone()))
+            .expect("OpenVPN setting should persist");
+
+        let updated = store
+            .set_check_for_updates_on_startup(false)
+            .expect("update preference should persist");
+        assert!(!updated.check_for_updates_on_startup);
+        assert_eq!(updated.openvpn_executable, Some(executable.clone()));
+
+        let reloaded = SettingsStore::new(app_data).expect("settings should reload");
+        assert!(!reloaded.get().check_for_updates_on_startup);
+        assert_eq!(reloaded.get().openvpn_executable, Some(executable));
+    }
+
+    #[test]
+    fn defaults_existing_settings_files_to_automatic_update_checks() {
+        let workspace = TempDir::new().expect("temporary directory should be created");
+        let app_data = workspace.path().join("app-data");
+        fs::create_dir_all(&app_data).expect("app data should be created");
+        fs::write(
+            app_data.join("settings.json"),
+            r#"{
+  "version": 1,
+  "settings": {
+    "openvpnExecutable": null
+  }
+}"#,
+        )
+        .expect("legacy settings should be written");
+
+        let store = SettingsStore::new(app_data).expect("legacy settings should load");
+        assert!(store.get().check_for_updates_on_startup);
     }
 
     #[test]

@@ -29,6 +29,7 @@ pub fn run() {
 
     let app = builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             let resource_dir = app.path().resource_dir()?;
@@ -87,9 +88,11 @@ pub fn run() {
             commands::profile::delete_profile,
             commands::settings::get_settings,
             commands::settings::set_openvpn_executable,
+            commands::settings::set_check_for_updates_on_startup,
             commands::settings::locate_openvpn,
             commands::settings::get_privileged_helper_status,
             commands::settings::enable_privileged_helper,
+            commands::update::get_latest_release,
             commands::vpn::connect_profile,
             commands::vpn::disconnect_profile,
             commands::vpn::get_connection,
