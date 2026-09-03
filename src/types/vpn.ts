@@ -6,7 +6,7 @@ export type ConnectionState =
   | "disconnecting"
   | "error";
 
-export type RouteSource = "serverPush" | "config" | "runtime" | "system";
+export type RouteSource = "serverPush" | "config" | "runtime" | "system" | "splitTunnel";
 
 export interface VpnRoute {
   network: string;

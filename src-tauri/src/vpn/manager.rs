@@ -77,8 +77,12 @@ impl VpnManager {
         let _operation = self.profile_operation(&profile.id).await;
         self.ensure_not_active(&profile.id).await?;
 
-        let runtime_config =
-            RuntimeConfig::create(&profile.config_path, profile.ignore_redirect_gateway)?;
+        let runtime_config = RuntimeConfig::create(
+            &profile.config_path,
+            profile.ignore_redirect_gateway,
+            &profile.split_tunnel_domains,
+        )
+        .await?;
         let initial_routes = runtime_config.routes().to_vec();
 
         let management_listener = allocate_management_listener().await?;
@@ -250,12 +254,16 @@ impl VpnManager {
         };
         let (control, control_receiver) = mpsc::channel(RUNTIME_COMMAND_CAPACITY);
         let _ = self.events.send(connection.clone());
+        let ignores_server_routes = runtime_config
+            .as_ref()
+            .is_some_and(RuntimeConfig::ignores_server_routes);
         let task = tokio::spawn(run_runtime(
             process,
             management,
             connection.clone(),
             publisher,
             control_receiver,
+            ignores_server_routes,
             runtime_config,
         ));
         let runtime = VpnRuntime {
@@ -366,6 +374,7 @@ async fn run_runtime(
     mut connection: VpnConnection,
     publisher: RuntimePublisher,
     mut commands: mpsc::Receiver<RuntimeCommand>,
+    ignores_server_routes: bool,
     _runtime_config: Option<RuntimeConfig>,
 ) {
     let mut process_status = interval(PROCESS_STATUS_INTERVAL);
@@ -399,7 +408,7 @@ async fn run_runtime(
             event = management.next_event() => {
                 match event {
                     Ok(Some(event)) => {
-                        apply_management_event(&mut connection, event);
+                        apply_management_event(&mut connection, event, ignores_server_routes);
                         publisher.publish(&connection);
                     }
                     Ok(None) | Err(_) => {
@@ -482,7 +491,11 @@ async fn stop_after_control_channel_closed(
     publisher.publish(connection);
 }
 
-fn apply_management_event(connection: &mut VpnConnection, event: ManagementEvent) {
+fn apply_management_event(
+    connection: &mut VpnConnection,
+    event: ManagementEvent,
+    ignores_server_routes: bool,
+) {
     match event {
         ManagementEvent::State(update) => apply_state_update(connection, update),
         ManagementEvent::ByteCount(byte_count) => {
@@ -490,6 +503,9 @@ fn apply_management_event(connection: &mut VpnConnection, event: ManagementEvent
             connection.bytes_sent = byte_count.bytes_sent;
         }
         ManagementEvent::PushReply(reply) => {
+            if ignores_server_routes {
+                return;
+            }
             for route in reply.routes {
                 if !connection.routes.contains(&route) {
                     connection.routes.push(route);
@@ -663,6 +679,31 @@ mod tests {
 
         assert_eq!(connection.tunnel_address, None);
         assert_eq!(connection.remote_address, None);
+    }
+
+    #[test]
+    fn ignores_server_routes_when_strict_split_tunnel_is_enabled() {
+        let profile_id =
+            crate::domain::ProfileId::new("vpn-split").expect("profile ID should be valid");
+        let mut connection = crate::domain::VpnConnection::disconnected(profile_id);
+        let reply = crate::vpn::routing::parse_push_reply(
+            "PUSH_REPLY,route 10.0.0.0 255.0.0.0,route 172.20.0.0 255.255.0.0",
+        )
+        .expect("push reply should parse");
+
+        super::apply_management_event(
+            &mut connection,
+            crate::vpn::management::ManagementEvent::PushReply(reply.clone()),
+            true,
+        );
+        assert!(connection.routes.is_empty());
+
+        super::apply_management_event(
+            &mut connection,
+            crate::vpn::management::ManagementEvent::PushReply(reply),
+            false,
+        );
+        assert_eq!(connection.routes.len(), 2);
     }
 
     #[cfg(unix)]

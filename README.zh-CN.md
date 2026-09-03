@@ -12,6 +12,10 @@
   <a href="./README.md">English</a> · <strong>简体中文</strong>
 </p>
 
+<p align="center">
+  <img src="./public/routepilot-connection.png" alt="RoutePilot 连接界面">
+</p>
+
 > [!IMPORTANT]
 > RoutePilot 当前版本为 0.1.2。macOS 构建目前适合本地开发和测试；公开分发应用包前，
 > 请先检查[发布清单](./RELEASE_CHECKLIST.md)。

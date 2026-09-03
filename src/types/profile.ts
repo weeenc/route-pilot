@@ -8,6 +8,7 @@ export interface VpnProfile {
   autoReconnect: boolean;
   autoConnect: boolean;
   ignoreRedirectGateway: boolean;
+  splitTunnelDomains: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -15,4 +16,5 @@ export interface VpnProfile {
 export interface UpdateVpnProfileInput {
   name: string;
   ignoreRedirectGateway: boolean;
+  splitTunnelDomains: string[];
 }

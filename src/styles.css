@@ -97,6 +97,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -790,6 +791,57 @@ h1 {
   white-space: nowrap;
 }
 
+.connection-routes {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--primary-100);
+}
+
+.connection-routes h4 {
+  margin: 0 0 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.connection-routes ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-routes li {
+  min-width: 0;
+}
+
+.connection-routes code {
+  overflow: hidden;
+  color: var(--gray-900);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-routes > p {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.connection-routes > p {
+  margin: 6px 0 0;
+}
+
 .traffic-stats > div {
   min-width: 0;
   padding-right: 20px;
@@ -1142,7 +1194,7 @@ h1 {
 }
 
 .dialog--editor {
-  width: min(100%, 500px);
+  width: min(100%, 560px);
 }
 
 .dialog__icon {
@@ -1223,7 +1275,17 @@ h1 {
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
+.form-field textarea {
+  width: 100%;
+  min-height: 112px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  resize: vertical;
+  line-height: 20px;
+}
+
 .form-field input:hover,
+.form-field textarea:hover,
 .text-input:hover {
   border-color: var(--gray-500);
 }

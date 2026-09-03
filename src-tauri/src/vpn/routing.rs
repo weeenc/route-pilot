@@ -6,6 +6,7 @@ use std::{
 };
 
 use ipnet::IpNet;
+use tokio::net::lookup_host;
 use uuid::Uuid;
 
 use crate::{
@@ -18,6 +19,9 @@ use super::parser::{tokenize_line, OvpnRouteDirective, ParsedOvpnConfig};
 
 const RUNTIME_CONFIG_FILE: &str = "runtime.ovpn";
 const IGNORE_REDIRECT_GATEWAY: &str = "pull-filter ignore \"redirect-gateway\"";
+const IGNORE_PUSHED_ROUTE: &str = "pull-filter ignore \"route\"";
+const IGNORE_PUSHED_ROUTE_IPV6: &str = "pull-filter ignore \"route-ipv6\"";
+const SPLIT_TUNNEL_DNS_PORT: u16 = 443;
 
 /// App-owned OpenVPN configuration used for one process lifetime.
 ///
@@ -26,10 +30,15 @@ const IGNORE_REDIRECT_GATEWAY: &str = "pull-filter ignore \"redirect-gateway\"";
 pub struct RuntimeConfig {
     path: PathBuf,
     routes: Vec<Route>,
+    ignores_server_routes: bool,
 }
 
 impl RuntimeConfig {
-    pub fn create(config_path: &Path, ignore_redirect_gateway: bool) -> Result<Self, AppError> {
+    pub async fn create(
+        config_path: &Path,
+        ignore_redirect_gateway: bool,
+        split_tunnel_domains: &[String],
+    ) -> Result<Self, AppError> {
         let config_path = fs::canonicalize(config_path).map_err(|_| AppError::ConfigInvalid {
             reason: "OpenVPN configuration does not exist".to_owned(),
         })?;
@@ -62,7 +71,7 @@ impl RuntimeConfig {
                 reason: "OpenVPN configuration has no parent directory".to_owned(),
             })?;
         validate_external_files(directory, &parsed)?;
-        let routes = parsed
+        let mut routes: Vec<Route> = parsed
             .routes
             .iter()
             .filter_map(|directive| {
@@ -70,20 +79,47 @@ impl RuntimeConfig {
                     .ok()
                     .flatten()
             })
+            .filter(|route| split_tunnel_domains.is_empty() || route.network.prefix_len() > 1)
             .collect();
 
+        let split_tunnel_routes = resolve_split_tunnel_domains(split_tunnel_domains).await?;
+        for route in &split_tunnel_routes {
+            if !routes
+                .iter()
+                .any(|existing: &Route| existing.network == route.network)
+            {
+                routes.push(route.clone());
+            }
+        }
+
         let mut runtime_source = source;
+        if !split_tunnel_domains.is_empty() {
+            runtime_source = remove_local_full_tunnel_directives(&runtime_source);
+        }
         let already_ignores_redirect = parsed.pull_filters.iter().any(|filter| {
             filter.action.eq_ignore_ascii_case("ignore")
                 && filter.text.eq_ignore_ascii_case("redirect-gateway")
         });
-        if ignore_redirect_gateway && !already_ignores_redirect {
-            if !runtime_source.is_empty() && !runtime_source.ends_with('\n') {
-                runtime_source.push('\n');
-            }
-            runtime_source.push_str(IGNORE_REDIRECT_GATEWAY);
-            runtime_source.push('\n');
+        if (ignore_redirect_gateway || !split_tunnel_domains.is_empty())
+            && !already_ignores_redirect
+        {
+            append_runtime_directive(&mut runtime_source, IGNORE_REDIRECT_GATEWAY);
         }
+        if !split_tunnel_domains.is_empty() {
+            append_pull_filter_if_missing(
+                &mut runtime_source,
+                &parsed,
+                "route",
+                IGNORE_PUSHED_ROUTE,
+            );
+            append_pull_filter_if_missing(
+                &mut runtime_source,
+                &parsed,
+                "route-ipv6",
+                IGNORE_PUSHED_ROUTE_IPV6,
+            );
+        }
+        append_split_tunnel_routes(&mut runtime_source, &split_tunnel_routes);
 
         let path = directory.join(RUNTIME_CONFIG_FILE);
         let temporary_path = directory.join(format!(".runtime-{}.tmp", Uuid::new_v4()));
@@ -94,7 +130,11 @@ impl RuntimeConfig {
         }
         write_result?;
 
-        Ok(Self { path, routes })
+        Ok(Self {
+            path,
+            routes,
+            ignores_server_routes: !split_tunnel_domains.is_empty(),
+        })
     }
 
     #[must_use]
@@ -105,6 +145,148 @@ impl RuntimeConfig {
     #[must_use]
     pub fn routes(&self) -> &[Route] {
         &self.routes
+    }
+
+    #[must_use]
+    pub fn ignores_server_routes(&self) -> bool {
+        self.ignores_server_routes
+    }
+}
+
+fn append_runtime_directive(source: &mut String, directive: &str) {
+    if !source.is_empty() && !source.ends_with('\n') {
+        source.push('\n');
+    }
+    source.push_str(directive);
+    source.push('\n');
+}
+
+fn append_pull_filter_if_missing(
+    source: &mut String,
+    parsed: &ParsedOvpnConfig,
+    text: &str,
+    directive: &str,
+) {
+    let already_present = parsed.pull_filters.iter().any(|filter| {
+        filter.action.eq_ignore_ascii_case("ignore") && filter.text.eq_ignore_ascii_case(text)
+    });
+    if !already_present {
+        append_runtime_directive(source, directive);
+    }
+}
+
+async fn resolve_split_tunnel_domains(domains: &[String]) -> Result<Vec<Route>, AppError> {
+    let mut routes = Vec::new();
+
+    for domain in domains {
+        let addresses = if let Ok(address) = domain.parse::<IpAddr>() {
+            vec![address]
+        } else {
+            lookup_host((domain.as_str(), SPLIT_TUNNEL_DNS_PORT))
+                .await
+                .map_err(|_| AppError::ConfigInvalid {
+                    reason: "split-tunnel domain could not be resolved".to_owned(),
+                })?
+                .map(|address| address.ip())
+                .collect::<Vec<_>>()
+        };
+
+        if addresses.is_empty() {
+            return Err(AppError::ConfigInvalid {
+                reason: "split-tunnel domain has no address".to_owned(),
+            });
+        }
+
+        for address in addresses {
+            let prefix = if address.is_ipv4() { 32 } else { 128 };
+            let route = Route::new(address, prefix, None, None, RouteSource::SplitTunnel)?;
+            if !routes
+                .iter()
+                .any(|existing: &Route| existing.network == route.network)
+            {
+                routes.push(route);
+            }
+        }
+    }
+
+    routes.sort_by_key(|route| route.network.to_string());
+    Ok(routes)
+}
+
+fn remove_local_full_tunnel_directives(source: &str) -> String {
+    let mut filtered = source
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') || trimmed.starts_with(';') {
+                return true;
+            }
+
+            !is_local_full_tunnel_directive(trimmed)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if source.ends_with('\n') {
+        filtered.push('\n');
+    }
+    filtered
+}
+
+fn is_local_full_tunnel_directive(line: &str) -> bool {
+    let Ok(tokens) = tokenize_line(line, 0) else {
+        return false;
+    };
+    let Some(directive) = tokens.first() else {
+        return false;
+    };
+
+    if directive.eq_ignore_ascii_case("redirect-gateway")
+        || directive.eq_ignore_ascii_case("redirect-private")
+    {
+        return true;
+    }
+
+    let route = match directive.to_ascii_lowercase().as_str() {
+        "route" => Some(OvpnRouteDirective {
+            network: tokens.get(1).cloned().unwrap_or_default(),
+            netmask: tokens.get(2).cloned(),
+            gateway: tokens.get(3).cloned(),
+        }),
+        "route-ipv6" => Some(OvpnRouteDirective {
+            network: tokens.get(1).cloned().unwrap_or_default(),
+            netmask: None,
+            gateway: tokens.get(2).cloned(),
+        }),
+        _ => None,
+    };
+
+    route
+        .and_then(|directive| {
+            parse_route_directive(&directive, RouteSource::Config)
+                .ok()
+                .flatten()
+        })
+        .is_some_and(|route| route.network.prefix_len() <= 1)
+}
+
+fn append_split_tunnel_routes(source: &mut String, routes: &[Route]) {
+    if routes.is_empty() {
+        return;
+    }
+    if !source.is_empty() && !source.ends_with('\n') {
+        source.push('\n');
+    }
+
+    for route in routes {
+        match route.network.addr() {
+            IpAddr::V4(address) => {
+                source.push_str(&format!("route {address} 255.255.255.255\n"));
+            }
+            IpAddr::V6(address) => {
+                source.push_str(&format!("route-ipv6 {address}/128\n"));
+            }
+        }
     }
 }
 
@@ -350,7 +532,10 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{parse_push_reply, parse_route_directive, RuntimeConfig, IGNORE_REDIRECT_GATEWAY};
+    use super::{
+        parse_push_reply, parse_route_directive, RuntimeConfig, IGNORE_PUSHED_ROUTE,
+        IGNORE_PUSHED_ROUTE_IPV6, IGNORE_REDIRECT_GATEWAY,
+    };
     use crate::{domain::RouteSource, vpn::parser::OvpnRouteDirective};
 
     #[test]
@@ -417,15 +602,16 @@ mod tests {
             .all(|route| route.source == RouteSource::ServerPush));
     }
 
-    #[test]
-    fn creates_isolated_runtime_config_and_removes_it_on_drop() {
+    #[tokio::test]
+    async fn creates_isolated_runtime_config_and_removes_it_on_drop() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         let original = "client\nroute 10.10.0.0 255.255.0.0\n";
         fs::write(&config_path, original).expect("source config should be written");
 
-        let runtime =
-            RuntimeConfig::create(&config_path, true).expect("runtime config should be generated");
+        let runtime = RuntimeConfig::create(&config_path, true, &[])
+            .await
+            .expect("runtime config should be generated");
         let runtime_path = runtime.path().to_path_buf();
         let generated =
             fs::read_to_string(&runtime_path).expect("runtime config should be readable");
@@ -439,8 +625,8 @@ mod tests {
         assert!(!runtime_path.exists());
     }
 
-    #[test]
-    fn does_not_duplicate_existing_redirect_filter() {
+    #[tokio::test]
+    async fn does_not_duplicate_existing_redirect_filter() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         fs::write(
@@ -449,22 +635,24 @@ mod tests {
         )
         .expect("source config should be written");
 
-        let runtime =
-            RuntimeConfig::create(&config_path, true).expect("runtime config should be generated");
+        let runtime = RuntimeConfig::create(&config_path, true, &[])
+            .await
+            .expect("runtime config should be generated");
         let generated =
             fs::read_to_string(runtime.path()).expect("runtime config should be readable");
 
         assert_eq!(generated.matches(IGNORE_REDIRECT_GATEWAY).count(), 1);
     }
 
-    #[test]
-    fn leaves_redirect_filter_out_when_profile_setting_is_disabled() {
+    #[tokio::test]
+    async fn leaves_redirect_filter_out_when_profile_setting_is_disabled() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         fs::write(&config_path, "client\n").expect("source config should be written");
 
-        let runtime =
-            RuntimeConfig::create(&config_path, false).expect("runtime config should be generated");
+        let runtime = RuntimeConfig::create(&config_path, false, &[])
+            .await
+            .expect("runtime config should be generated");
         let generated =
             fs::read_to_string(runtime.path()).expect("runtime config should be readable");
 
@@ -473,14 +661,61 @@ mod tests {
         assert!(!generated.contains("route-nopull"));
     }
 
+    #[tokio::test]
+    async fn creates_split_tunnel_routes_and_removes_local_full_tunnel_options() {
+        let workspace = TempDir::new().expect("temporary workspace should be created");
+        let config_path = workspace.path().join("config.ovpn");
+        let original = "client\nREDIRECT-GATEWAY def1\nredirect-private\nroute 0.0.0.0 128.0.0.0\nroute 10.0.0.0 255.0.0.0\n";
+        fs::write(&config_path, original).expect("source config should be written");
+
+        let domains = vec!["192.0.2.10".to_owned(), "2001:db8::10".to_owned()];
+        let runtime = RuntimeConfig::create(&config_path, false, &domains)
+            .await
+            .expect("split-tunnel runtime config should be generated");
+        let generated = fs::read_to_string(runtime.path()).expect("runtime config should exist");
+
+        assert!(!generated.contains("REDIRECT-GATEWAY def1"));
+        assert!(!generated.contains("redirect-private"));
+        assert!(!generated.contains("route 0.0.0.0 128.0.0.0"));
+        assert!(generated.contains(IGNORE_REDIRECT_GATEWAY));
+        assert!(generated.contains(IGNORE_PUSHED_ROUTE));
+        assert!(generated.contains(IGNORE_PUSHED_ROUTE_IPV6));
+        assert!(generated.contains("route 192.0.2.10 255.255.255.255"));
+        assert!(generated.contains("route-ipv6 2001:db8::10/128"));
+        assert!(runtime.ignores_server_routes());
+        assert!(runtime
+            .routes()
+            .iter()
+            .any(|route| route.source == RouteSource::SplitTunnel));
+        assert_eq!(
+            runtime
+                .routes()
+                .iter()
+                .filter(|route| route.network.prefix_len() <= 1)
+                .count(),
+            0
+        );
+    }
+
     #[test]
-    fn rejects_invalid_runtime_config_without_touching_the_source() {
+    fn keeps_comments_when_removing_local_full_tunnel_options() {
+        let source = "# redirect-gateway def1\n; redirect-private\nredirect-gateway def1\n";
+
+        assert_eq!(
+            super::remove_local_full_tunnel_directives(source),
+            "# redirect-gateway def1\n; redirect-private\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_runtime_config_without_touching_the_source() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         let original = "client\nca \"unterminated.crt\n";
         fs::write(&config_path, original).expect("source config should be written");
 
-        let error = RuntimeConfig::create(&config_path, true)
+        let error = RuntimeConfig::create(&config_path, true, &[])
+            .await
             .err()
             .expect("invalid config should be rejected");
 
@@ -489,14 +724,15 @@ mod tests {
         assert!(!workspace.path().join("runtime.ovpn").exists());
     }
 
-    #[test]
-    fn rejects_missing_external_certificate_before_process_start() {
+    #[tokio::test]
+    async fn rejects_missing_external_certificate_before_process_start() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         fs::write(&config_path, "client\nca missing-ca.crt\n")
             .expect("source config should be written");
 
-        let error = RuntimeConfig::create(&config_path, true)
+        let error = RuntimeConfig::create(&config_path, true, &[])
+            .await
             .err()
             .expect("missing certificate should be rejected");
 
@@ -505,8 +741,8 @@ mod tests {
     }
 
     #[cfg(target_os = "macos")]
-    #[test]
-    fn rejects_script_hooks_before_privileged_process_start() {
+    #[tokio::test]
+    async fn rejects_script_hooks_before_privileged_process_start() {
         let workspace = TempDir::new().expect("temporary directory should be created");
         let config_path = workspace.path().join("config.ovpn");
         fs::write(
@@ -515,7 +751,8 @@ mod tests {
         )
         .expect("source config should be written");
 
-        let error = RuntimeConfig::create(&config_path, false)
+        let error = RuntimeConfig::create(&config_path, false, &[])
+            .await
             .err()
             .expect("privileged script hook should be rejected");
 

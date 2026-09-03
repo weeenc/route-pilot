@@ -18,6 +18,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const draftName = ref(props.profile.name);
 const draftIgnoreRedirectGateway = ref(props.profile.ignoreRedirectGateway);
+const draftSplitTunnelDomains = ref(props.profile.splitTunnelDomains.join("\n"));
 const errorKey = ref("");
 const nameInput = ref<HTMLInputElement | null>(null);
 const dialog = ref<HTMLElement | null>(null);
@@ -36,11 +37,23 @@ function save(): void {
     return;
   }
 
+  const splitTunnelDomains = draftSplitTunnelDomains.value
+    .split(/\r?\n/)
+    .map((domain) => domain.trim())
+    .filter(Boolean);
+
   errorKey.value = "";
   emit("save", {
     name,
-    ignoreRedirectGateway: draftIgnoreRedirectGateway.value,
+    ignoreRedirectGateway: draftIgnoreRedirectGateway.value || splitTunnelDomains.length > 0,
+    splitTunnelDomains,
   });
+}
+
+function enableSplitTunnel(): void {
+  if (draftSplitTunnelDomains.value.trim()) {
+    draftIgnoreRedirectGateway.value = true;
+  }
 }
 
 onMounted(async () => {
@@ -104,6 +117,19 @@ onMounted(async () => {
             <strong>{{ t("connectionCard.editor.keepInternetOutside") }}</strong>
             <small>{{ t("connectionCard.editor.keepInternetOutsideHint") }}</small>
           </span>
+        </label>
+
+        <label class="form-field form-field--textarea">
+          <span>{{ t("connectionCard.editor.splitTunnelDomains") }}</span>
+          <textarea
+            v-model="draftSplitTunnelDomains"
+            rows="5"
+            spellcheck="false"
+            :placeholder="t('connectionCard.editor.splitTunnelDomainsPlaceholder')"
+            :disabled="isSaving"
+            @input="enableSplitTunnel"
+          ></textarea>
+          <small>{{ t("connectionCard.editor.splitTunnelDomainsHint") }}</small>
         </label>
 
         <p v-if="errorKey" class="form-message form-message--error" role="alert">

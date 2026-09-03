@@ -189,10 +189,11 @@ impl ProfileStore {
         profile_id: &ProfileId,
         name: String,
         ignore_redirect_gateway: bool,
+        split_tunnel_domains: Vec<String>,
     ) -> Result<VpnProfile, AppError> {
         let profile_directory = self.profile_directory(profile_id);
         let mut profile = self.get_profile(profile_id)?;
-        profile.update_editable_settings(name, ignore_redirect_gateway)?;
+        profile.update_editable_settings(name, ignore_redirect_gateway, split_tunnel_domains)?;
         persist_profile_metadata(&profile_directory, &profile)?;
         Ok(profile)
     }
@@ -614,11 +615,17 @@ mod tests {
             .expect("profile should import");
 
         let updated = store
-            .update_profile(&imported.id, "  Production VPN  ".to_owned(), false)
+            .update_profile(
+                &imported.id,
+                "  Production VPN  ".to_owned(),
+                false,
+                Vec::new(),
+            )
             .expect("profile should update");
 
         assert_eq!(updated.name, "Production VPN");
         assert!(!updated.ignore_redirect_gateway);
+        assert!(updated.split_tunnel_domains.is_empty());
         assert!(updated.updated_at >= imported.updated_at);
         assert_eq!(updated.config_path, imported.config_path);
 

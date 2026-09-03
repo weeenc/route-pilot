@@ -119,6 +119,10 @@ export default {
       nameHint: "使用便于识别此 VPN 的名称。",
       keepInternetOutside: "让常规互联网流量绕过此 VPN",
       keepInternetOutsideHint: "忽略服务器下发的默认路由，将在下次连接时生效。",
+      splitTunnelDomains: "仅指定网站走此 VPN",
+      splitTunnelDomainsPlaceholder: "例如\ninternal.example.com\nportal.example.com",
+      splitTunnelDomainsHint:
+        "每行填写一个域名或 IP 地址。连接时解析当前地址并创建专用路由；域名地址变化后请重新连接。填写后会忽略服务器下发的网段路由，其他流量走常规网络。",
       nameRequired: "请输入连接名称。",
       nameTooLong: "连接名称最多可包含 80 个字符。",
       saveFailed: "无法保存这些连接设置。",
@@ -141,6 +145,7 @@ export default {
       config: "配置文件",
       runtime: "运行时",
       system: "系统",
+      splitTunnel: "指定网站",
     },
   },
   settings: {
