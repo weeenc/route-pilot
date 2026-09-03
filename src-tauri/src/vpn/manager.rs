@@ -589,17 +589,16 @@ mod tests {
         domain::{ConnectionState, ProfileId},
         error::AppError,
         vpn::{
-            management::{ManagementClient, ManagementEvent, ManagementStateUpdate},
+            management::{ManagementClient, ManagementStateUpdate},
             process::OpenVpnProcess,
-            routing::parse_push_reply,
         },
     };
 
     use super::allocate_management_listener;
     #[cfg(unix)]
-    use super::VpnManager;
+    use super::apply_state_update;
     #[cfg(unix)]
-    use super::{apply_management_event, apply_state_update};
+    use super::VpnManager;
 
     #[tokio::test]
     async fn reserves_an_available_dynamic_loopback_port_until_process_start() {
