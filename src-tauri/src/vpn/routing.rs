@@ -19,8 +19,8 @@ use super::parser::{tokenize_line, OvpnRouteDirective, ParsedOvpnConfig};
 
 const RUNTIME_CONFIG_FILE: &str = "runtime.ovpn";
 const IGNORE_REDIRECT_GATEWAY: &str = "pull-filter ignore \"redirect-gateway\"";
-const IGNORE_PUSHED_ROUTE: &str = "pull-filter ignore \"route\"";
-const IGNORE_PUSHED_ROUTE_IPV6: &str = "pull-filter ignore \"route-ipv6\"";
+const IGNORE_PUSHED_ROUTE: &str = "pull-filter ignore \"route \"";
+const IGNORE_PUSHED_ROUTE_IPV6: &str = "pull-filter ignore \"route-ipv6 \"";
 const SPLIT_TUNNEL_DNS_PORT: u16 = 443;
 
 /// App-owned OpenVPN configuration used for one process lifetime.
@@ -109,13 +109,13 @@ impl RuntimeConfig {
             append_pull_filter_if_missing(
                 &mut runtime_source,
                 &parsed,
-                "route",
+                "route ",
                 IGNORE_PUSHED_ROUTE,
             );
             append_pull_filter_if_missing(
                 &mut runtime_source,
                 &parsed,
-                "route-ipv6",
+                "route-ipv6 ",
                 IGNORE_PUSHED_ROUTE_IPV6,
             );
         }
@@ -536,7 +536,10 @@ mod tests {
         parse_push_reply, parse_route_directive, RuntimeConfig, IGNORE_PUSHED_ROUTE,
         IGNORE_PUSHED_ROUTE_IPV6, IGNORE_REDIRECT_GATEWAY,
     };
-    use crate::{domain::RouteSource, vpn::parser::OvpnRouteDirective};
+    use crate::{
+        domain::RouteSource,
+        vpn::parser::{OvpnRouteDirective, ParsedOvpnConfig},
+    };
 
     #[test]
     fn parses_ipv4_routes_with_contiguous_netmasks_and_gateways() {
@@ -680,6 +683,12 @@ mod tests {
         assert!(generated.contains(IGNORE_REDIRECT_GATEWAY));
         assert!(generated.contains(IGNORE_PUSHED_ROUTE));
         assert!(generated.contains(IGNORE_PUSHED_ROUTE_IPV6));
+        let parsed = ParsedOvpnConfig::parse(&generated)
+            .expect("generated split-tunnel config should parse");
+        assert!(!parsed.pull_filters.iter().any(|filter| {
+            filter.action.eq_ignore_ascii_case("ignore")
+                && "route-gateway 192.0.2.1".starts_with(&filter.text)
+        }));
         assert!(generated.contains("route 192.0.2.10 255.255.255.255"));
         assert!(generated.contains("route-ipv6 2001:db8::10/128"));
         assert!(runtime.ignores_server_routes());
