@@ -121,6 +121,10 @@ export default {
       keepInternetOutside: "Keep regular internet traffic outside this VPN",
       keepInternetOutsideHint:
         "Ignores a server-pushed default route. Takes effect the next time you connect.",
+      splitTunnelDomains: "Route only selected sites through this VPN",
+      splitTunnelDomainsPlaceholder: "For example\ninternal.example.com\nportal.example.com",
+      splitTunnelDomainsHint:
+        "Enter one domain or IP address per line. Current addresses are resolved when you connect; reconnect after DNS changes. Server-pushed network routes are ignored, so other traffic stays on the regular network.",
       nameRequired: "Enter a connection name.",
       nameTooLong: "Connection names can contain up to 80 characters.",
       saveFailed: "Couldn't save these connection settings.",
@@ -143,6 +147,7 @@ export default {
       config: "Config",
       runtime: "Runtime",
       system: "System",
+      splitTunnel: "Selected sites",
     },
   },
   settings: {

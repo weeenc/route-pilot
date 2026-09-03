@@ -14,6 +14,7 @@ pub enum RouteSource {
     Config,
     Runtime,
     System,
+    SplitTunnel,
 }
 
 /// A validated IP network route associated with a VPN connection.

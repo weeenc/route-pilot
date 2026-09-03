@@ -9,6 +9,7 @@ import {
   isConnectedState,
   isConnectingState,
 } from "../utils/connectionState";
+import { summarizeRoutes } from "../utils/routes";
 import StatusBadge from "./StatusBadge.vue";
 import TrafficStats from "./TrafficStats.vue";
 
@@ -47,6 +48,7 @@ const isConnecting = computed(() => isConnectingState(displayState.value));
 const isDisconnecting = computed(() => displayState.value === "disconnecting");
 const isBusy = computed(() => isConnecting.value || isDisconnecting.value);
 const canDisconnect = computed(() => canDisconnectState(displayState.value));
+const routeSummary = computed(() => summarizeRoutes(props.connection?.routes ?? []));
 
 const title = computed(() => {
   if (displayState.value === "error") return t("currentConnection.errorTitle");
@@ -135,6 +137,17 @@ function runAction(): void {
           <dd>{{ connection.remoteAddress ?? "—" }}</dd>
         </div>
       </dl>
+      <section v-if="routeSummary.visibleRoutes.length" class="connection-routes">
+        <h4>{{ t("connectionCard.routes") }}</h4>
+        <ul>
+          <li v-for="route in routeSummary.visibleRoutes" :key="route.network">
+            <code>{{ route.network }}</code>
+          </li>
+        </ul>
+        <p v-if="routeSummary.hiddenCount">
+          {{ t("connectionCard.moreRoutes", { count: routeSummary.hiddenCount }) }}
+        </p>
+      </section>
     </div>
   </article>
 </template>

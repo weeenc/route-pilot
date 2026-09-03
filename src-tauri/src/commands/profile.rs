@@ -15,6 +15,8 @@ use crate::{
 pub struct UpdateProfileInput {
     name: String,
     ignore_redirect_gateway: bool,
+    #[serde(default)]
+    split_tunnel_domains: Vec<String>,
 }
 
 fn profile_store(state: &AppState) -> Result<MutexGuard<'_, ProfileStore>, ErrorPayload> {
@@ -84,7 +86,12 @@ pub async fn update_profile(
         let state = task_app.state::<AppState>();
         let store = profile_store(state.inner())?;
         let profile = store
-            .update_profile(&profile_id, input.name, input.ignore_redirect_gateway)
+            .update_profile(
+                &profile_id,
+                input.name,
+                input.ignore_redirect_gateway,
+                input.split_tunnel_domains,
+            )
             .map_err(|error| error.to_payload())?;
         state
             .cache_profile(profile.clone())

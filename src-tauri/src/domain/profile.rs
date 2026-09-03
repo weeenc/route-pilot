@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf};
+use std::{collections::HashSet, fmt, net::IpAddr, path::PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -6,6 +6,8 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use crate::error::AppError;
 
 pub const MAX_PROFILE_NAME_CHARACTERS: usize = 80;
+pub const MAX_SPLIT_TUNNEL_DOMAINS: usize = 64;
+pub const MAX_SPLIT_TUNNEL_DOMAIN_CHARACTERS: usize = 253;
 
 /// Stable identifier used to associate persisted profiles with connection state.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -74,6 +76,8 @@ pub struct VpnProfile {
     pub auto_reconnect: bool,
     pub auto_connect: bool,
     pub ignore_redirect_gateway: bool,
+    #[serde(default)]
+    pub split_tunnel_domains: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -111,6 +115,7 @@ impl VpnProfile {
             auto_reconnect: true,
             auto_connect: false,
             ignore_redirect_gateway: true,
+            split_tunnel_domains: Vec::new(),
             created_at: now,
             updated_at: now,
         })
@@ -120,21 +125,88 @@ impl VpnProfile {
         &mut self,
         name: impl Into<String>,
         ignore_redirect_gateway: bool,
+        split_tunnel_domains: Vec<String>,
     ) -> Result<(), AppError> {
-        self.update_editable_settings_at(name, ignore_redirect_gateway, Utc::now())
+        self.update_editable_settings_at(
+            name,
+            ignore_redirect_gateway,
+            split_tunnel_domains,
+            Utc::now(),
+        )
     }
 
     fn update_editable_settings_at(
         &mut self,
         name: impl Into<String>,
         ignore_redirect_gateway: bool,
+        split_tunnel_domains: Vec<String>,
         now: DateTime<Utc>,
     ) -> Result<(), AppError> {
         self.name = normalize_profile_name(name.into())?;
-        self.ignore_redirect_gateway = ignore_redirect_gateway;
+        self.split_tunnel_domains = normalize_split_tunnel_domains(split_tunnel_domains)?;
+        self.ignore_redirect_gateway =
+            ignore_redirect_gateway || !self.split_tunnel_domains.is_empty();
         self.updated_at = now;
         Ok(())
     }
+}
+
+pub fn normalize_split_tunnel_domains(domains: Vec<String>) -> Result<Vec<String>, AppError> {
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+
+    for raw_domain in domains {
+        let domain = raw_domain.trim().trim_end_matches('.').to_ascii_lowercase();
+        if domain.is_empty() {
+            continue;
+        }
+        if domain.chars().count() > MAX_SPLIT_TUNNEL_DOMAIN_CHARACTERS {
+            return Err(AppError::ConfigInvalid {
+                reason: format!(
+                    "split-tunnel domain cannot exceed {MAX_SPLIT_TUNNEL_DOMAIN_CHARACTERS} characters"
+                ),
+            });
+        }
+        if seen.contains(&domain) {
+            continue;
+        }
+        if normalized.len() >= MAX_SPLIT_TUNNEL_DOMAINS {
+            return Err(AppError::ConfigInvalid {
+                reason: format!(
+                    "split-tunnel domain list cannot contain more than {MAX_SPLIT_TUNNEL_DOMAINS} entries"
+                ),
+            });
+        }
+
+        if domain.parse::<IpAddr>().is_err() && !is_valid_hostname(&domain) {
+            return Err(AppError::ConfigInvalid {
+                reason: "split-tunnel entries must be valid hostnames or IP addresses".to_owned(),
+            });
+        }
+
+        seen.insert(domain.clone());
+        normalized.push(domain);
+    }
+
+    Ok(normalized)
+}
+
+fn is_valid_hostname(hostname: &str) -> bool {
+    hostname.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+            && label
+                .as_bytes()
+                .first()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric())
+            && label
+                .as_bytes()
+                .last()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric())
+    })
 }
 
 fn normalize_profile_name(name: String) -> Result<String, AppError> {
@@ -165,7 +237,9 @@ mod tests {
 
     use chrono::{TimeZone, Utc};
 
-    use super::{ProfileId, VpnProfile, MAX_PROFILE_NAME_CHARACTERS};
+    use super::{
+        normalize_split_tunnel_domains, ProfileId, VpnProfile, MAX_PROFILE_NAME_CHARACTERS,
+    };
 
     #[test]
     fn creates_profile_with_safe_routing_defaults() {
@@ -185,6 +259,7 @@ mod tests {
         assert!(profile.auto_reconnect);
         assert!(!profile.auto_connect);
         assert!(profile.ignore_redirect_gateway);
+        assert!(profile.split_tunnel_domains.is_empty());
         assert_eq!(profile.created_at, now);
         assert_eq!(profile.updated_at, now);
     }
@@ -223,11 +298,12 @@ mod tests {
         .expect("profile should be valid");
 
         profile
-            .update_editable_settings_at("  Office VPN  ", false, updated_at)
+            .update_editable_settings_at("  Office VPN  ", false, Vec::new(), updated_at)
             .expect("editable settings should update");
 
         assert_eq!(profile.name, "Office VPN");
         assert!(!profile.ignore_redirect_gateway);
+        assert!(profile.split_tunnel_domains.is_empty());
         assert_eq!(profile.created_at, created_at);
         assert_eq!(profile.updated_at, updated_at);
         assert_eq!(
@@ -245,13 +321,55 @@ mod tests {
         )
         .expect("profile should be valid");
 
-        assert!(profile.update_editable_settings("   ", true).is_err());
         assert!(profile
-            .update_editable_settings("a".repeat(MAX_PROFILE_NAME_CHARACTERS + 1), true)
+            .update_editable_settings("   ", true, Vec::new())
             .is_err());
         assert!(profile
-            .update_editable_settings("Office\nVPN", true)
+            .update_editable_settings(
+                "a".repeat(MAX_PROFILE_NAME_CHARACTERS + 1),
+                true,
+                Vec::new(),
+            )
             .is_err());
+        assert!(profile
+            .update_editable_settings("Office\nVPN", true, Vec::new())
+            .is_err());
+    }
+
+    #[test]
+    fn normalizes_and_deduplicates_split_tunnel_domains() {
+        assert_eq!(
+            normalize_split_tunnel_domains(vec![
+                " Example.COM. ".to_owned(),
+                "example.com".to_owned(),
+                "192.168.10.6".to_owned(),
+            ])
+            .expect("domains should be valid"),
+            vec!["example.com", "192.168.10.6"]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_split_tunnel_domains() {
+        assert!(normalize_split_tunnel_domains(vec!["*.example.com".to_owned()]).is_err());
+        assert!(normalize_split_tunnel_domains(vec!["example-.com".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn split_tunnel_domains_force_default_route_bypass() {
+        let mut profile = VpnProfile::new(
+            ProfileId::new("vpn-a").expect("profile ID should be valid"),
+            "VPN A",
+            PathBuf::from("config.ovpn"),
+        )
+        .expect("profile should be valid");
+
+        profile
+            .update_editable_settings("VPN A", false, vec!["example.com".to_owned()])
+            .expect("profile settings should update");
+
+        assert!(profile.ignore_redirect_gateway);
+        assert_eq!(profile.split_tunnel_domains, vec!["example.com"]);
     }
 
     #[test]
@@ -274,6 +392,7 @@ mod tests {
         assert_eq!(value["configPath"], "profiles/vpn-a/config.ovpn");
         assert_eq!(value["autoReconnect"], true);
         assert_eq!(value["ignoreRedirectGateway"], true);
+        assert_eq!(value["splitTunnelDomains"], serde_json::json!([]));
         assert!(value.get("state").is_none());
         assert!(value.get("config_path").is_none());
     }
